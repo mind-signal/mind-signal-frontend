@@ -46,7 +46,7 @@
     "@chromatic-com/storybook": "^5.0.0",
     "@commitlint/cli": "^20.5.0",
     "@commitlint/config-conventional": "^20.5.0",
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "^1.63.0",
     "@storybook/addon-a11y": "^10.2.6",
     "@storybook/addon-docs": "^10.2.6",
     "@storybook/addon-onboarding": "^10.2.6",
