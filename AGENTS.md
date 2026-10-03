@@ -1,6 +1,6 @@
 # AGENTS.md — Mind Signal Frontend
 
-모든 에이전트(Claude Code / Codex CLI / 기타)가 이 레포에서 작업할 때 공통으로 따르는 지시. Claude 전용 메타는 `CLAUDE.md`에 있음. 이 문서는 자가완결 — 상세 규칙은 `.agents/rules/*.md`로 확장됨(단방향, 이 문서가 1차 소스).
+모든 에이전트(Claude Code / Codex CLI / 기타)가 이 레포에서 작업할 때 공통으로 따르는 지시. 세부 규칙은 `.agents/rules/`의 architecture.md, code-style.md, git-workflow.md, api-patterns.md, react-components.md, test-modification.md, verification-loop.md, documentation.md이며 작업 전에 직접 연다. 이 문서는 자가완결 — 상세 규칙은 `.agents/rules/*.md`로 확장됨(단방향, 이 문서가 1차 소스).
 
 > **제품 문서와 작업 상태**: 4레포 공통 문서는 `../docs/`에 있음(구조·계약·데이터는 `docs/architecture/`, 요구사항·추적표는 `docs/requirements/`). 현재 작업 상태 정본은 `../.plans/DASHBOARD.md`.
 
