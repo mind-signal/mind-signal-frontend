@@ -5,12 +5,14 @@
 
 - `main` is protected — never commit directly.
 - All feature branches must be submitted via PR targeting `dev`. `dev` → `main` merges follow team release cadence.
-- Branch naming (Work ID style — see AGENTS.md §10 for what a Work ID means):
-  - Feature: `feat/{domain-wNNN}-{slug}` — e.g. `feat/session-w042-pairing-retry`
-  - Bug fix: `fix/{short-desc}` — e.g. `fix/session-pairing-timeout`
-  - Hotfix (production): `hotfix/{short-desc}`
-  - Refactor: `refactor/{short-desc}`
-  - Docs: `docs/{short-desc}`
+- Branch naming (product-wide rule; canonical text: `mind-signal/.plans/README.md`, section "브랜치 이름"; see AGENTS.md §10 for what a Work ID means):
+  - If the work falls within the scope and completion criteria of a registered Work, use `{type}/{work-id}-{slug}` for any type. `{work-id}` is the full Work ID in lowercase. Examples from the merge history: `feat/ui-w006-operator-connection-recovery`, `fix/ui-w002-lab-viewport-routing`, `docs/ui-w002-link-convention`
+  - If the work has no Work affiliation, use `{type}/{slug}` or `{type}/{issue-number}-{slug}` (format examples: `fix/readme-link`, `fix/123-readme-link`). The `#` before the issue number is optional: `fix/#123-readme-link` is the same format.
+  - Never use an issue number in place of the Work ID on a branch that belongs to a Work; link the issue from the PR body.
+  - Use lowercase English letters, digits, and hyphens for `{slug}`. It may differ from the Work folder slug.
+  - `{type}` is the commit type that matches the final purpose of the work. `hotfix` is an extra branch prefix for urgent production fixes; it is not a commit type. It takes the place of `{type}` and follows the same formats as any other type: `hotfix/{work-id}-{slug}` for work that belongs to a Work, `hotfix/{slug}` or `hotfix/{issue-number}-{slug}` otherwise.
+  - If the product plan files (`mind-signal/.plans/`) are unavailable, decide by the Work ID and scope you were given. If no Work ID was given, use the format for work with no Work affiliation.
+  - `main` and `dev` are integration branches and keep their names; release PRs go from `dev` to `main`. Do not rename existing branches because of this rule.
 
 ## Commit Convention — Conventional Commits 1.0
 
@@ -52,7 +54,7 @@ One PR may contain multiple commits when each commit is independently meaningful
 ## No Direct Commits to Main
 
 `main` branch direct commit is strictly prohibited.
-Flow: `feat/{domain-wNNN}-{slug}` → PR → `dev` → PR → `main`.
+Flow: work branch → PR → `dev` → PR → `main`.
 
 ## Co-authored-by
 
