@@ -4,88 +4,17 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { measurementApi, EmotivMetrics } from '@/07-shared/api';
 import { engineApi } from '@/07-shared/api/engine';
 import { getSocket } from '@/07-shared/lib/socket-client';
-import { config } from '@/07-shared/config/config';
+import type {
+  AlignedPairPayload,
+  DualSessionFailedPayload,
+  DualSessionReadyPayload,
+  EegLivePayload,
+  JoinRoomAck,
+  MeasurementCompletePayload,
+  StimulusStartPayload,
+} from '@/07-shared/lib/socket-events';
 import type { StopReason } from '@/07-shared/types';
 import type { DualSessionState } from '@/05-features/sessions/model/use-dual-session';
-
-/**
- * eeg-live 소켓 이벤트 페이로드 구조 정의함
- */
-interface EegLivePayload {
-  sessionId: string;
-  data: EmotivMetrics;
-}
-
-/**
- * measurement-complete 소켓 이벤트 페이로드 구조 정의함
- */
-interface MeasurementCompletePayload {
-  sessionId: string;
-}
-
-/**
- * dual-session-ready 이벤트 페이로드 구조 정의함 (PLAN L150)
- */
-interface DualSessionReadyPayload {
-  groupId: string;
-  timestamp_ms: number;
-}
-
-/**
- * dual-session-failed 이벤트 페이로드 구조 정의함 (PLAN L151)
- */
-interface DualSessionFailedPayload {
-  groupId: string;
-  error: string;
-}
-
-/**
- * stimulus_start 이벤트 페이로드 구조 정의함 (PLAN L152)
- */
-interface StimulusStartPayload {
-  groupId: string;
-  timestamp_ms: number;
-}
-
-/**
- * WavePower 구조 — aligned_pair 페이로드에서 사용함 (PLAN L303-309)
- */
-interface WavePower {
-  delta: number;
-  theta: number;
-  alpha: number;
-  beta: number;
-  gamma: number;
-}
-
-/**
- * aligned_pair 이벤트 페이로드 구조 정의함 (PLAN L153, v8 H-1)
- * subject_0 키 사용 금지 — subject_1/subject_2 1-based 통일
- */
-/**
- * 한 subject의 한 시점 샘플 — waves(대역 파워)와 metrics(EMOTIV 지표 6종).
- * metrics는 구버전 BE 프레임에서 없을 수 있어 optional임.
- */
-interface SubjectSample {
-  waves: WavePower;
-  metrics?: EmotivMetrics;
-}
-
-interface AlignedPairPayload {
-  groupId: string;
-  timestamp_ms: number;
-  subject_1: SubjectSample | null;
-  subject_2: SubjectSample | null;
-}
-
-/**
- * join-room ack 응답 구조 정의함 (PLAN L276)
- */
-interface JoinRoomAck {
-  ok: boolean;
-  groupId?: string;
-  error?: string;
-}
 
 /**
  * useSignal 훅 옵션 정의함
@@ -197,7 +126,7 @@ const useSignal = (sessionId: string | null, options?: UseSignalOptions) => {
    * 재시도는 단일 helper 내부에서 처리하여 재귀 참조 문제 회피함
    */
   const emitJoinRoom = useCallback((gid: string): Promise<boolean> => {
-    const socket = getSocket(config.api.socketUrl ?? config.api.baseUrl);
+    const socket = getSocket();
 
     return new Promise<boolean>((resolve) => {
       /** 단일 emit + ack 처리 내부 helper 정의함 */
@@ -245,7 +174,7 @@ const useSignal = (sessionId: string | null, options?: UseSignalOptions) => {
    */
   const registerDualListeners = useCallback(
     (gid: string) => {
-      const socket = getSocket(config.api.socketUrl ?? config.api.baseUrl);
+      const socket = getSocket();
 
       // 이전 등록분을 먼저 해제함. 시작이 실패한 뒤 다시 누르면 같은 소켓에
       // 핸들러가 겹쳐 붙어 이벤트 1건이 여러 번 처리됨
@@ -354,7 +283,7 @@ const useSignal = (sessionId: string | null, options?: UseSignalOptions) => {
    * DUAL_2PC 소켓 이벤트 리스너 해제 처리함
    */
   const unregisterDualListeners = useCallback(() => {
-    const socket = getSocket(config.api.socketUrl ?? config.api.baseUrl);
+    const socket = getSocket();
 
     if (dualReadyHandlerRef.current) {
       socket.off('dual-session-ready', dualReadyHandlerRef.current);
@@ -380,12 +309,8 @@ const useSignal = (sessionId: string | null, options?: UseSignalOptions) => {
    * 새 측정 상태를 꺼버림 — 모든 등록 경로가 이 helper 경유함 (CodeRabbit PR #66)
    */
   const swapCompleteHandler = useCallback(
-    (
-      handler: (
-        payload: MeasurementCompletePayload & { groupId?: string }
-      ) => void
-    ) => {
-      const socket = getSocket(config.api.socketUrl ?? config.api.baseUrl);
+    (handler: (payload: MeasurementCompletePayload) => void) => {
+      const socket = getSocket();
       if (completeHandlerRef.current) {
         socket.off('measurement-complete', completeHandlerRef.current);
       }
@@ -412,9 +337,7 @@ const useSignal = (sessionId: string | null, options?: UseSignalOptions) => {
     emitJoinRoom(groupId);
     registerDualListeners(groupId);
 
-    const completeHandler = (
-      payload: MeasurementCompletePayload & { groupId?: string }
-    ) => {
+    const completeHandler = (payload: MeasurementCompletePayload) => {
       if ((payload.groupId ?? null) !== groupId) return; // 다른 그룹 무시함
       setIsMeasuring(false);
       setDualSessionState?.('completed');
@@ -470,9 +393,7 @@ const useSignal = (sessionId: string | null, options?: UseSignalOptions) => {
         registerDualListeners(groupId);
 
         // measurement-complete (DUAL_2PC 경우 room emit — groupId 매칭)
-        const completeHandler = (
-          payload: MeasurementCompletePayload & { groupId?: string }
-        ) => {
+        const completeHandler = (payload: MeasurementCompletePayload) => {
           const incomingGroupId = payload.groupId ?? null;
           if (incomingGroupId !== groupId) return; // 다른 그룹 이벤트 무시함
           setIsMeasuring(false);
@@ -488,7 +409,7 @@ const useSignal = (sessionId: string | null, options?: UseSignalOptions) => {
         // DUAL/BTI 기존 경로 — 200 OK 즉시 전이 (PLAN L164-167)
         setIsMeasuring(true);
 
-        const socket = getSocket(config.api.socketUrl ?? config.api.baseUrl);
+        const socket = getSocket();
 
         // 이 경로도 room 합류가 필요함. 백엔드가 전역 emit 을 그룹 room emit 으로
         // 바꿔(AUTH-W001) 합류하지 않으면 eeg-live 와 measurement-complete 가
@@ -559,7 +480,7 @@ const useSignal = (sessionId: string | null, options?: UseSignalOptions) => {
     async (stopGroupId?: string, stopReason?: StopReason) => {
       setIsMeasuring(false);
 
-      const socket = getSocket(config.api.socketUrl ?? config.api.baseUrl);
+      const socket = getSocket();
 
       if (handlerRef.current) {
         socket.off('eeg-live', handlerRef.current);
@@ -596,7 +517,7 @@ const useSignal = (sessionId: string | null, options?: UseSignalOptions) => {
   // 언마운트 시 소켓 리스너 및 타이머 정리함
   useEffect(() => {
     return () => {
-      const socket = getSocket(config.api.socketUrl ?? config.api.baseUrl);
+      const socket = getSocket();
 
       if (handlerRef.current) {
         socket.off('eeg-live', handlerRef.current);

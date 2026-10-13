@@ -18,7 +18,7 @@ import { analysisApi } from '@/07-shared/api/analysis';
 import sessionApi from '@/07-shared/api/session';
 import type { AnalysisResultData } from '@/07-shared/api/analysis';
 import { getSocket } from '@/07-shared/lib/socket-client';
-import { config } from '@/07-shared/config/config';
+import type { AnalysisStatusPayload } from '@/07-shared/lib/socket-events';
 import {
   POLLING_TIMEOUT_SECONDS,
   POLLING_INTERVAL_MS,
@@ -157,7 +157,7 @@ const Results: React.FC<ResultsProps> = ({
   // analysis-status 소켓 이벤트 리스너 등록함
   useEffect(() => {
     if (!groupId) return;
-    const socket = getSocket(config.api.socketUrl ?? config.api.baseUrl);
+    const socket = getSocket();
 
     // room 에 합류해야 analysis-status 가 도착함. 백엔드가 전역 emit 을 그룹 room
     // emit 으로 바꿨음 (AUTH-W001)
@@ -165,11 +165,7 @@ const Results: React.FC<ResultsProps> = ({
       typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     socket.emit('join-room', { groupId, token });
 
-    const handler = (payload: {
-      groupId: string;
-      tier: AnalysisTier;
-      message: string;
-    }) => {
+    const handler = (payload: AnalysisStatusPayload) => {
       if (payload.groupId !== groupId) return;
       setTier(payload.tier);
       if (payload.tier === 'ABORTED') {
