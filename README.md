@@ -317,6 +317,8 @@ docs(readme): clarify CI pipeline steps
 - `fix/ui-w002-lab-viewport-routing`
 - `docs/ui-w002-link-convention`
 
-`#{이슈번호}` 형식의 예: `fix/#123-readme-link` (형식 예)
+이슈 번호 앞의 `#`은 적어도 되고 생략해도 됩니다. `fix/#123-readme-link`와 `fix/123-readme-link`는 같은 형식입니다(형식 예).
+
+운영 긴급 수정에 쓰는 `hotfix` 접두사도 같은 형식을 따릅니다. Work에 속하면 `hotfix/{work-id}-{작업명}`, 속하지 않으면 `hotfix/{작업명}`입니다.
 
 이슈에서 "Create a branch"로 자동 생성할 때 base branch는 항상 `dev`로 설정합니다.
