@@ -2,7 +2,11 @@
 
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { getSocket } from '@/07-shared/lib/socket-client';
-import { config } from '@/07-shared/config/config';
+import type {
+  DualSessionFailedPayload,
+  DualSessionReadyPayload,
+  MeasurementCompletePayload,
+} from '@/07-shared/lib/socket-events';
 import {
   fetchRegistryStatus,
   type RegistryStatus,
@@ -18,30 +22,6 @@ export type DualSessionState =
   | 'measuring' // 측정 중
   | 'completed' // 측정 완료
   | 'aborted'; // 등록 실패 / 세션 만료
-
-/**
- * dual-session-ready 이벤트 페이로드 구조 정의함
- */
-interface DualSessionReadyPayload {
-  groupId: string;
-  timestamp_ms: number;
-}
-
-/**
- * dual-session-failed 이벤트 페이로드 구조 정의함
- */
-interface DualSessionFailedPayload {
-  groupId: string;
-  error: string;
-}
-
-/**
- * measurement-complete 이벤트 페이로드 구조 정의함 (DUAL_2PC room emit)
- */
-interface MeasurementCompletePayload {
-  sessionId?: string;
-  groupId?: string;
-}
 
 /**
  * [Feature] DUAL_2PC 세션 상태 머신 훅 정의함 (Phase 16 Wave 2 본 구현)
@@ -95,7 +75,7 @@ export function useDualSession(
     // DUAL_2PC 모드 + groupId 모두 있을 때만 소켓 이벤트 등록함
     if (!groupId || experimentMode !== 'DUAL_2PC') return;
 
-    const socket = getSocket(config.api.socketUrl ?? config.api.baseUrl);
+    const socket = getSocket();
 
     // dual-session-ready: BE가 측정 전이 신호 emit 처리함
     // partnerConnected 설정은 polling이 담당하므로 상태 전이만 수행함

@@ -1,28 +1,19 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { config } from '@/07-shared/config/config';
 import { getSocket } from '@/07-shared/lib/socket-client';
 import type { OperatorSocketSession } from '@/07-shared/lib/operator-socket-session.lib';
+import type {
+  JoinOperatorRoomAck,
+  StreamHealthAlert,
+} from '@/07-shared/lib/socket-events';
+
+// 배너 컴포넌트의 기존 import 경로를 유지하려고 다시 내보냄
+export type { StreamHealthAlert };
 
 const JOIN_ACK_TIMEOUT_MS = 5_000;
 const JOIN_RETRY_DELAY_MS = 1_000;
 const MAX_JOIN_ATTEMPTS = 3;
-
-type StreamHealthStatus = 'healthy' | 'stale' | 'disconnected';
-type StreamHealthSource = 'backend' | 'engine';
-
-/**
- * 서버 stream-health 이벤트 데이터 규격 정의함.
- */
-export interface StreamHealthAlert {
-  groupId: string;
-  subjectIndex: number;
-  status: StreamHealthStatus;
-  source?: StreamHealthSource;
-  silentMs?: number;
-  recovered?: boolean;
-}
 
 /**
  * 운영자 경보 채널 미연결 사유 규격 정의함.
@@ -34,11 +25,6 @@ export type OperatorAlertChannelIssue =
   | 'connection-timeout'
   | 'ack-timeout'
   | 'join-failed';
-
-interface JoinOperatorRoomAck {
-  ok: boolean;
-  error?: string;
-}
 
 interface UseOperatorStreamHealthResult {
   alerts: StreamHealthAlert[];
@@ -121,7 +107,7 @@ export function useOperatorStreamHealth(
       };
     }
 
-    const socket = getSocket(config.api.socketUrl ?? config.api.baseUrl);
+    const socket = getSocket();
     const timeoutIds = new Set<ReturnType<typeof setTimeout>>();
     let joinAttemptCount = 0;
     let isUnauthorized = false;
