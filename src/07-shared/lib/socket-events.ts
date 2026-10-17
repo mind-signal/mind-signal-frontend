@@ -94,7 +94,8 @@ export interface StreamHealthAlert {
 }
 
 /**
- * analysis-status 이벤트 페이로드 구조 정의함
+ * analysis-status 이벤트 페이로드 구조 정의함.
+ * 백엔드가 VALID, PARTIAL, ABORTED 세 등급 모두에 보냄 (SESSION-W008)
  */
 export interface AnalysisStatusPayload {
   groupId: string;

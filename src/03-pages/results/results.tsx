@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { PageType } from '@/07-shared/types';
-import { analysisApi } from '@/07-shared/api/analysis';
+import { analysisApi, tierFromError } from '@/07-shared/api/analysis';
 import sessionApi from '@/07-shared/api/session';
 import type { AnalysisResultData } from '@/07-shared/api/analysis';
 import { getSocket } from '@/07-shared/lib/socket-client';
@@ -25,6 +25,7 @@ import {
 } from '@/07-shared/constants/experiment';
 import type { AnalysisTier } from '@/07-shared/types';
 import MyResultsList from './my-results-list';
+import { resolveTier } from './resolve-tier';
 
 interface ResultsProps {
   theme: 'light' | 'dark';
@@ -65,10 +66,26 @@ const Results: React.FC<ResultsProps> = ({
 
     let cancelled = false;
 
+    /** 결과 없는 ABORTED 확정 시 폴링을 멈추고 재측정 안내로 넘김 */
+    const stopAsAborted = () => {
+      setTier('ABORTED');
+      setPollingTimedOut(true);
+      setLoading(false);
+      setError(null);
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+
     const fetchData = async () => {
       try {
+        let notFoundTier: AnalysisTier | null = null;
         const [analysisRes, statusRes] = await Promise.all([
-          analysisApi.getResult(groupId).catch(() => null),
+          analysisApi.getResult(groupId).catch((err: unknown) => {
+            notFoundTier = tierFromError(err);
+            return null;
+          }),
           sessionApi.checkSessionStatus(groupId),
         ]);
 
@@ -84,9 +101,13 @@ const Results: React.FC<ResultsProps> = ({
 
         if (analysisRes?.status === 'success' && analysisRes.data) {
           setAnalysisData(analysisRes.data);
+          setTier(resolveTier(analysisRes.data, sessions.length));
           setLoading(false);
           if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+        } else if (notFoundTier === 'ABORTED') {
+          stopAsAborted();
         } else {
+          if (notFoundTier) setTier(notFoundTier);
           // 분석 결과 미존재 — 폴링함
           setError('분석이 진행 중입니다...');
           pollStartRef.current = Date.now();
@@ -113,24 +134,13 @@ const Results: React.FC<ResultsProps> = ({
                   setError(null);
                   setLoading(false);
                   if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-
-                  // Tier 판정: isBTI인데 원래 DUAL이었으면 PARTIAL
-                  // SEQUENTIAL 결과는 tier 오탐 방지를 위해 제외함.
-                  // SESSION-W002 로 SEQUENTIAL 측정 경로는 사라졌으나 이 필터는
-                  // 남김 — analysis_mode 에는 과거 문서의 SEQUENTIAL 값이 legacy
-                  // 로 남아 있어 여전히 걸러야 함
-                  if (
-                    res.data.isBTI &&
-                    sessionsRef.current.length >= 2 &&
-                    res.data.analysis_mode !== 'SEQUENTIAL'
-                  ) {
-                    setTier('PARTIAL');
-                  } else {
-                    setTier('VALID');
-                  }
+                  setTier(resolveTier(res.data, sessionsRef.current.length));
                 }
-              } catch {
-                // 계속 폴링함
+              } catch (err) {
+                // 404 본문이 ABORTED 면 멈추고, 그 밖에는 계속 폴링함
+                if (!cancelled && tierFromError(err) === 'ABORTED') {
+                  stopAsAborted();
+                }
               }
             }, POLLING_INTERVAL_MS);
           }

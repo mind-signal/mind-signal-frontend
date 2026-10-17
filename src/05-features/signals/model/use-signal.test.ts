@@ -56,6 +56,7 @@ vi.mock('@/07-shared/config/config', () => ({
 // DualSessionState 타입 참조
 import type { DualSessionState } from '@/05-features/sessions/model/use-dual-session';
 import { measurementApi } from '@/07-shared/api';
+import { engineApi } from '@/07-shared/api/engine';
 
 /**
  * 등록된 소켓 이벤트 핸들러를 이름으로 추출하는 헬퍼 정의함
@@ -534,5 +535,20 @@ describe('useSignal DUAL_2PC — join-room emit + stimulus 테스트 수행함',
     expect(registeredEvents).toContain('dual-session-failed');
     expect(registeredEvents).toContain('stimulus_start');
     expect(registeredEvents).toContain('aligned_pair');
+  });
+  it('자연 종료 뒤 stop-all 이 stoppedCount 0 으로 200 응답해도 오류 없이 끝남 (SESSION-W008)', async () => {
+    vi.mocked(engineApi.stopAll).mockResolvedValueOnce({
+      data: { status: 'success', stoppedCount: 0, allCompleted: true },
+    } as Awaited<ReturnType<typeof engineApi.stopAll>>);
+    const errorSpy = vi.spyOn(console, 'error');
+    const { result } = renderHook(() => useSignal('session-abc'));
+
+    await act(async () => {
+      await result.current.stopMeasurement('group-xyz', 'ManualEarly');
+    });
+
+    expect(engineApi.stopAll).toHaveBeenCalledWith('group-xyz', 'ManualEarly');
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(result.current.isMeasuring).toBe(false);
   });
 });
