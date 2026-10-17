@@ -60,6 +60,8 @@ const Results: React.FC<ResultsProps> = ({
   const pollStartRef = useRef<number>(0);
   const sessionsRef = useRef<Array<{ isMe?: boolean; userName?: string }>>([]);
   const fetchDataRef = useRef<(() => void) | null>(null);
+  // ABORTED 확정 뒤 늦게 도착한 폴링 성공 응답이 화면을 덮지 않게 함
+  const abortedRef = useRef(false);
 
   useEffect(() => {
     if (!groupId || !isLoggedIn) return;
@@ -68,6 +70,7 @@ const Results: React.FC<ResultsProps> = ({
 
     /** 결과 없는 ABORTED 확정 시 폴링을 멈추고 재측정 안내로 넘김 */
     const stopAsAborted = () => {
+      abortedRef.current = true;
       setTier('ABORTED');
       setPollingTimedOut(true);
       setLoading(false);
@@ -81,15 +84,25 @@ const Results: React.FC<ResultsProps> = ({
     const fetchData = async () => {
       try {
         let notFoundTier: AnalysisTier | null = null;
+        let statusError: unknown = null;
         const [analysisRes, statusRes] = await Promise.all([
           analysisApi.getResult(groupId).catch((err: unknown) => {
             notFoundTier = tierFromError(err);
             return null;
           }),
-          sessionApi.checkSessionStatus(groupId),
+          // 세션 조회 실패가 결과 조회의 ABORTED 판정을 막지 않게 따로 받음
+          sessionApi.checkSessionStatus(groupId).catch((err: unknown) => {
+            statusError = err;
+            return null;
+          }),
         ]);
 
         if (cancelled) return;
+        if (notFoundTier === 'ABORTED') {
+          stopAsAborted();
+          return;
+        }
+        if (!statusRes) throw statusError;
 
         // 세션 상태에서 userName/partnerName 추출함
         const sessions = statusRes.data?.data?.sessions ?? [];
@@ -104,8 +117,6 @@ const Results: React.FC<ResultsProps> = ({
           setTier(resolveTier(analysisRes.data, sessions.length));
           setLoading(false);
           if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-        } else if (notFoundTier === 'ABORTED') {
-          stopAsAborted();
         } else {
           if (notFoundTier) setTier(notFoundTier);
           // 분석 결과 미존재 — 폴링함
@@ -129,7 +140,12 @@ const Results: React.FC<ResultsProps> = ({
 
               try {
                 const res = await analysisApi.getResult(groupId);
-                if (!cancelled && res?.status === 'success' && res.data) {
+                if (
+                  !cancelled &&
+                  !abortedRef.current &&
+                  res?.status === 'success' &&
+                  res.data
+                ) {
                   setAnalysisData(res.data);
                   setError(null);
                   setLoading(false);
@@ -179,6 +195,7 @@ const Results: React.FC<ResultsProps> = ({
       if (payload.groupId !== groupId) return;
       setTier(payload.tier);
       if (payload.tier === 'ABORTED') {
+        abortedRef.current = true;
         setPollingTimedOut(true);
         setLoading(false);
         setError(null);

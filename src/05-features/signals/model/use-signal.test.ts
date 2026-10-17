@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { AxiosHeaders } from 'axios';
 import useSignal from './use-signal';
 
 // measurementApi 모킹 처리함
@@ -539,7 +540,11 @@ describe('useSignal DUAL_2PC — join-room emit + stimulus 테스트 수행함',
   it('자연 종료 뒤 stop-all 이 stoppedCount 0 으로 200 응답해도 오류 없이 끝남 (SESSION-W008)', async () => {
     vi.mocked(engineApi.stopAll).mockResolvedValueOnce({
       data: { status: 'success', stoppedCount: 0, allCompleted: true },
-    } as Awaited<ReturnType<typeof engineApi.stopAll>>);
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+    });
     const errorSpy = vi.spyOn(console, 'error');
     const { result } = renderHook(() => useSignal('session-abc'));
 
