@@ -557,11 +557,29 @@ describe('useSignal DUAL_2PC — join-room emit + stimulus 테스트 수행함',
     expect(result.current.isMeasuring).toBe(false);
   });
 
-  it('stop-all API 가 실패하면 오류를 기록하고 예외 없이 측정 종료 상태를 유지함', async () => {
+  it('측정 중 stop-all API 가 실패해도 오류를 기록하고 예외 없이 측정을 종료함', async () => {
     const error = new Error('stop-all failed');
     vi.mocked(engineApi.stopAll).mockRejectedValueOnce(error);
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const { result } = renderHook(() => useSignal('session-abc'));
+    const { result } = renderHook(() =>
+      useSignal('session-abc', {
+        experimentMode: 'DUAL_2PC',
+        groupId: 'group-xyz',
+        setDualSessionState: mockSetDualSessionState,
+      })
+    );
+
+    // 측정 중 상태를 만든 뒤 멈춤
+    await act(async () => {
+      await result.current.startMeasurement();
+    });
+    act(() => {
+      getSocketHandler('dual-session-ready')!({
+        groupId: 'group-xyz',
+        timestamp_ms: Date.now(),
+      });
+    });
+    expect(result.current.isMeasuring).toBe(true);
 
     await act(async () => {
       await result.current.stopMeasurement('group-xyz', 'ManualEarly');

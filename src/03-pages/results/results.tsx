@@ -66,6 +66,14 @@ const Results: React.FC<ResultsProps> = ({
   useEffect(() => {
     if (!groupId || !isLoggedIn) return;
 
+    // 새 그룹 조회는 이전 그룹의 ABORTED 확정과 결과를 이어받지 않음
+    abortedRef.current = false;
+    setAnalysisData(null);
+    setTier(null);
+    setPollingTimedOut(false);
+    setLoading(true);
+    setError(null);
+
     let cancelled = false;
 
     /** 결과 없는 ABORTED 확정 시 폴링을 멈추고 재측정 안내로 넘김 */

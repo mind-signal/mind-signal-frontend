@@ -65,17 +65,21 @@ function notFound(tier: string | null) {
   });
 }
 
-function renderResults() {
-  return render(
+function resultsFor(groupId: string) {
+  return (
     <Results
       theme="light"
       isLoggedIn
       setIsLoggedIn={vi.fn()}
       setCurrentPage={vi.fn()}
       openAuthModal={vi.fn()}
-      groupId={GROUP_ID}
+      groupId={groupId}
     />
   );
+}
+
+function renderResults() {
+  return render(resultsFor(GROUP_ID));
 }
 
 describe('Results ABORTED 처리 (SESSION-W008)', () => {
@@ -185,5 +189,53 @@ describe('Results ABORTED 처리 (SESSION-W008)', () => {
     });
 
     expect(screen.getByText('분석 불가')).toBeInTheDocument();
+  });
+
+  it('ABORTED 그룹에서 새 그룹으로 바뀌면 이전 ABORTED 안내를 보이지 않음', async () => {
+    mockGetResult
+      .mockRejectedValueOnce(notFound('ABORTED'))
+      .mockImplementation(() => new Promise(() => {}));
+
+    const { rerender } = renderResults();
+    expect(await screen.findByText('분석 불가')).toBeInTheDocument();
+
+    rerender(resultsFor('group-2'));
+
+    expect(
+      await screen.findByText('분석 결과를 불러오는 중...')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('분석 불가')).not.toBeInTheDocument();
+  });
+
+  it('결과를 본 그룹에서 새 그룹으로 바뀌면 이전 결과를 보이지 않음', async () => {
+    mockGetResult
+      .mockResolvedValueOnce({
+        status: 'success',
+        data: {
+          groupId: GROUP_ID,
+          matchingScore: 87,
+          synchronyScore: null,
+          yScore: null,
+          aiComment: '',
+          markdown: '',
+          user1Name: null,
+          user2Name: null,
+          isBTI: false,
+          metricsMean: null,
+          wavesMean: null,
+          tier: 'VALID',
+        },
+      })
+      .mockImplementation(() => new Promise(() => {}));
+
+    const { rerender } = renderResults();
+    expect(await screen.findByText('87%')).toBeInTheDocument();
+
+    rerender(resultsFor('group-2'));
+
+    expect(
+      await screen.findByText('분석 결과를 불러오는 중...')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('87%')).not.toBeInTheDocument();
   });
 });
