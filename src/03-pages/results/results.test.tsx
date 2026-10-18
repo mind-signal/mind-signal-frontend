@@ -65,6 +65,27 @@ function notFound(tier: string | null) {
   });
 }
 
+/** 결과 조회 성공 응답 생성함 */
+function success(groupId: string, matchingScore: number) {
+  return {
+    status: 'success' as const,
+    data: {
+      groupId,
+      matchingScore,
+      synchronyScore: null,
+      yScore: null,
+      aiComment: '',
+      markdown: '',
+      user1Name: null,
+      user2Name: null,
+      isBTI: false,
+      metricsMean: null,
+      wavesMean: null,
+      tier: 'VALID' as const,
+    },
+  };
+}
+
 function resultsFor(groupId: string) {
   return (
     <Results
@@ -153,6 +174,22 @@ describe('Results ABORTED 처리 (SESSION-W008)', () => {
     expect(screen.getByText('분석 불가')).toBeInTheDocument();
   });
 
+  it('폴링 404 ABORTED 로 멈춘 뒤 먼저 나간 폴링의 성공 응답이 와도 재측정 안내를 유지함', async () => {
+    let resolvePoll!: (res: AnalysisResultResponse) => void;
+    mockGetResult
+      .mockRejectedValueOnce(notFound(null))
+      .mockImplementationOnce(() => new Promise((r) => (resolvePoll = r)))
+      .mockRejectedValueOnce(notFound('ABORTED'))
+      .mockImplementation(() => new Promise(() => {}));
+
+    renderResults();
+    expect(await screen.findByText('분석 불가')).toBeInTheDocument();
+
+    await act(async () => resolvePoll(success(GROUP_ID, 80)));
+
+    expect(screen.getByText('분석 불가')).toBeInTheDocument();
+  });
+
   it('초기 조회 대기 중 소켓 ABORTED 뒤 성공 응답이 와도 재측정 안내를 유지함', async () => {
     let resolveFirst!: (res: AnalysisResultResponse) => void;
     mockGetResult.mockImplementationOnce(
@@ -205,6 +242,70 @@ describe('Results ABORTED 처리 (SESSION-W008)', () => {
       await screen.findByText('분석 결과를 불러오는 중...')
     ).toBeInTheDocument();
     expect(screen.queryByText('분석 불가')).not.toBeInTheDocument();
+  });
+
+  it('ABORTED 그룹에서 새 그룹으로 바뀌고 새 그룹 조회가 성공하면 새 결과를 보임', async () => {
+    mockGetResult
+      .mockRejectedValueOnce(notFound('ABORTED'))
+      .mockResolvedValue(success('group-2', 66));
+
+    const { rerender } = renderResults();
+    expect(await screen.findByText('분석 불가')).toBeInTheDocument();
+
+    rerender(resultsFor('group-2'));
+
+    expect(await screen.findByText('66%')).toBeInTheDocument();
+    expect(screen.queryByText('분석 불가')).not.toBeInTheDocument();
+  });
+
+  it('ABORTED 그룹에서 새 그룹으로 바뀌고 새 그룹 조회가 실패하면 일반 오류를 보임', async () => {
+    mockGetResult
+      .mockRejectedValueOnce(notFound('ABORTED'))
+      .mockRejectedValue(notFound(null));
+
+    const { rerender } = renderResults();
+    expect(await screen.findByText('분석 불가')).toBeInTheDocument();
+
+    mockCheckStatus.mockRejectedValue(new Error('network'));
+    rerender(resultsFor('group-2'));
+
+    expect(
+      await screen.findByText('일시적 오류가 발생했습니다.')
+    ).toBeInTheDocument();
+  });
+
+  it('결과를 본 그룹에서 새 그룹으로 바뀌고 새 그룹 조회가 실패하면 이전 결과 대신 오류를 보임', async () => {
+    mockGetResult
+      .mockResolvedValueOnce(success(GROUP_ID, 87))
+      .mockRejectedValue(notFound(null));
+
+    const { rerender } = renderResults();
+    expect(await screen.findByText('87%')).toBeInTheDocument();
+
+    mockCheckStatus.mockRejectedValue(new Error('network'));
+    rerender(resultsFor('group-2'));
+
+    expect(
+      await screen.findByText('일시적 오류가 발생했습니다.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('87%')).not.toBeInTheDocument();
+  });
+
+  it('폴링 중인 그룹에서 새 그룹으로 바뀌면 이전 진행 안내 대신 불러오는 중을 보임', async () => {
+    mockGetResult
+      .mockRejectedValueOnce(notFound(null))
+      .mockImplementation(() => new Promise(() => {}));
+
+    const { rerender } = renderResults();
+    expect(
+      await screen.findByText('분석이 진행 중입니다...')
+    ).toBeInTheDocument();
+
+    rerender(resultsFor('group-2'));
+
+    expect(
+      await screen.findByText('분석 결과를 불러오는 중...')
+    ).toBeInTheDocument();
   });
 
   it('결과를 본 그룹에서 새 그룹으로 바뀌면 이전 결과를 보이지 않음', async () => {
