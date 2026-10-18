@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
+import { AxiosHeaders } from 'axios';
 import useSignal from './use-signal';
 
 // measurementApi 모킹 처리함
@@ -56,6 +57,7 @@ vi.mock('@/07-shared/config/config', () => ({
 // DualSessionState 타입 참조
 import type { DualSessionState } from '@/05-features/sessions/model/use-dual-session';
 import { measurementApi } from '@/07-shared/api';
+import { engineApi } from '@/07-shared/api/engine';
 
 /**
  * 등록된 소켓 이벤트 핸들러를 이름으로 추출하는 헬퍼 정의함
@@ -534,5 +536,58 @@ describe('useSignal DUAL_2PC — join-room emit + stimulus 테스트 수행함',
     expect(registeredEvents).toContain('dual-session-failed');
     expect(registeredEvents).toContain('stimulus_start');
     expect(registeredEvents).toContain('aligned_pair');
+  });
+  it('자연 종료 뒤 stop-all 이 stoppedCount 0 으로 200 응답해도 오류 없이 끝남 (SESSION-W008)', async () => {
+    vi.mocked(engineApi.stopAll).mockResolvedValueOnce({
+      data: { status: 'success', stoppedCount: 0, allCompleted: true },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+    });
+    const errorSpy = vi.spyOn(console, 'error');
+    const { result } = renderHook(() => useSignal('session-abc'));
+
+    await act(async () => {
+      await result.current.stopMeasurement('group-xyz', 'ManualEarly');
+    });
+
+    expect(engineApi.stopAll).toHaveBeenCalledWith('group-xyz', 'ManualEarly');
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(result.current.isMeasuring).toBe(false);
+  });
+
+  it('측정 중 stop-all API 가 실패해도 오류를 기록하고 예외 없이 측정을 종료함', async () => {
+    const error = new Error('stop-all failed');
+    vi.mocked(engineApi.stopAll).mockRejectedValueOnce(error);
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { result } = renderHook(() =>
+      useSignal('session-abc', {
+        experimentMode: 'DUAL_2PC',
+        groupId: 'group-xyz',
+        setDualSessionState: mockSetDualSessionState,
+      })
+    );
+
+    // 측정 중 상태를 만든 뒤 멈춤
+    await act(async () => {
+      await result.current.startMeasurement();
+    });
+    act(() => {
+      getSocketHandler('dual-session-ready')!({
+        groupId: 'group-xyz',
+        timestamp_ms: Date.now(),
+      });
+    });
+    expect(result.current.isMeasuring).toBe(true);
+
+    await act(async () => {
+      await result.current.stopMeasurement('group-xyz', 'ManualEarly');
+    });
+
+    expect(engineApi.stopAll).toHaveBeenCalledWith('group-xyz', 'ManualEarly');
+    expect(errorSpy).toHaveBeenCalledWith('stop-all API 실패함:', error);
+    expect(result.current.isMeasuring).toBe(false);
+    errorSpy.mockRestore();
   });
 });

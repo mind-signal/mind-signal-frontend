@@ -162,6 +162,20 @@ describe('engineApi — 엔진 분석 API 통합 테스트 수행함', () => {
       expect(result.data.allCompleted).toBe(true);
     });
 
+    it('자연 종료로 이미 끝난 그룹의 200 stoppedCount 0 응답을 그대로 반환함 (SESSION-W008)', async () => {
+      mockPost.mockResolvedValue({
+        data: { status: 'success', stoppedCount: 0, allCompleted: true },
+      });
+
+      const result = await engineApi.stopAll('group-123');
+
+      expect(result.data).toEqual({
+        status: 'success',
+        stoppedCount: 0,
+        allCompleted: true,
+      });
+    });
+
     it('API 실패 시 에러 전파 처리함', async () => {
       mockPost.mockRejectedValue(new Error('Stop failed'));
 
