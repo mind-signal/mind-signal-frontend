@@ -1,3 +1,5 @@
+import axios from 'axios';
+import type { AnalysisTier } from '@/07-shared/types';
 import { api } from './base';
 
 /** 분석 결과 응답 타입 정의함 */
@@ -11,6 +13,8 @@ export interface AnalysisResultData {
   user1Name: string | null;
   user2Name: string | null;
   isBTI: boolean;
+  /** 백엔드가 저장한 등급임. 판정 전이거나 구버전 백엔드면 null 또는 없음 */
+  tier?: AnalysisTier | null;
   metricsMean: Record<string, number> | null;
   wavesMean: Record<string, number> | null;
   /** 분석 파이프라인 이름표. SEQUENTIAL 은 과거 문서에만 남는 legacy 값임 */
@@ -37,6 +41,15 @@ export interface MyResultItem {
 export interface MyResultsResponse {
   status: string;
   data: MyResultItem[];
+}
+
+/**
+ * 분석 결과 조회 실패(404) 본문의 등급 반환함.
+ * ABORTED 처럼 결과가 없는 그룹도 백엔드가 등급을 실어 보냄 (SESSION-W008)
+ */
+export function tierFromError(err: unknown): AnalysisTier | null {
+  if (!axios.isAxiosError<{ tier?: AnalysisTier | null }>(err)) return null;
+  return err.response?.data?.tier ?? null;
 }
 
 /** 분석 결과 조회 API 정의함 */

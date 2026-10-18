@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { analysisApi } from './analysis';
+import { AxiosError, AxiosHeaders } from 'axios';
+import { analysisApi, tierFromError } from './analysis';
 
 /**
  * Axios 인스턴스를 모킹하여 API 레이어를 네트워크에서 격리함
@@ -74,6 +75,34 @@ describe('analysisApi — 분석 결과 API 통합 테스트 수행함', () => {
       await expect(analysisApi.getResult('group-123')).rejects.toThrow(
         'Analysis not found'
       );
+    });
+  });
+
+  describe('tierFromError — 404 본문 등급 (SESSION-W008)', () => {
+    /** 백엔드 404 응답을 담은 AxiosError 생성함 */
+    function notFound(body: unknown) {
+      return new AxiosError('Not Found', '404', undefined, undefined, {
+        status: 404,
+        statusText: 'Not Found',
+        headers: {},
+        config: { headers: new AxiosHeaders() },
+        data: body,
+      });
+    }
+
+    it('404 본문의 tier 를 반환함', () => {
+      expect(tierFromError(notFound({ status: 'fail', tier: 'ABORTED' }))).toBe(
+        'ABORTED'
+      );
+    });
+
+    it('본문에 tier 가 없거나 null 이면 null 반환함', () => {
+      expect(tierFromError(notFound({ status: 'fail' }))).toBeNull();
+      expect(tierFromError(notFound({ tier: null }))).toBeNull();
+    });
+
+    it('Axios 에러가 아니면 null 반환함', () => {
+      expect(tierFromError(new Error('network'))).toBeNull();
     });
   });
 });
