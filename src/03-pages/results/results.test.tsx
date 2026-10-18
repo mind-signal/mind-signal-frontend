@@ -148,4 +148,42 @@ describe('Results ABORTED 처리 (SESSION-W008)', () => {
 
     expect(screen.getByText('분석 불가')).toBeInTheDocument();
   });
+
+  it('초기 조회 대기 중 소켓 ABORTED 뒤 성공 응답이 와도 재측정 안내를 유지함', async () => {
+    let resolveFirst!: (res: AnalysisResultResponse) => void;
+    mockGetResult.mockImplementationOnce(
+      () => new Promise((r) => (resolveFirst = r))
+    );
+
+    renderResults();
+    await waitFor(() => expect(mockGetResult).toHaveBeenCalledTimes(1));
+
+    const abort: AnalysisStatusPayload = {
+      groupId: GROUP_ID,
+      tier: 'ABORTED',
+      message: '분석에 실패했습니다.',
+    };
+    act(() => socketHandlers['analysis-status'](abort));
+    await act(async () => {
+      resolveFirst({
+        status: 'success',
+        data: {
+          groupId: GROUP_ID,
+          matchingScore: 80,
+          synchronyScore: null,
+          yScore: null,
+          aiComment: '',
+          markdown: '',
+          user1Name: null,
+          user2Name: null,
+          isBTI: false,
+          metricsMean: null,
+          wavesMean: null,
+          tier: 'VALID',
+        },
+      });
+    });
+
+    expect(screen.getByText('분석 불가')).toBeInTheDocument();
+  });
 });

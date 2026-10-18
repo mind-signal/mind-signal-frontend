@@ -97,7 +97,8 @@ const Results: React.FC<ResultsProps> = ({
           }),
         ]);
 
-        if (cancelled) return;
+        // 조회 중 소켓으로 ABORTED 가 확정됐으면 늦은 응답이 화면을 덮지 않게 함
+        if (cancelled || abortedRef.current) return;
         if (notFoundTier === 'ABORTED') {
           stopAsAborted();
           return;
