@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { PageType } from '@/07-shared/types';
-import { analysisApi } from '@/07-shared/api/analysis';
+import { analysisApi, tierFromError } from '@/07-shared/api/analysis';
 import sessionApi from '@/07-shared/api/session';
 import type { AnalysisResultData } from '@/07-shared/api/analysis';
 import { getSocket } from '@/07-shared/lib/socket-client';
@@ -25,6 +25,7 @@ import {
 } from '@/07-shared/constants/experiment';
 import type { AnalysisTier } from '@/07-shared/types';
 import MyResultsList from './my-results-list';
+import { resolveTier } from './resolve-tier';
 
 interface ResultsProps {
   theme: 'light' | 'dark';
@@ -59,20 +60,50 @@ const Results: React.FC<ResultsProps> = ({
   const pollStartRef = useRef<number>(0);
   const sessionsRef = useRef<Array<{ isMe?: boolean; userName?: string }>>([]);
   const fetchDataRef = useRef<(() => void) | null>(null);
+  // ABORTED 확정 뒤 늦게 도착한 폴링 성공 응답이 화면을 덮지 않게 함
+  const abortedRef = useRef(false);
 
   useEffect(() => {
     if (!groupId || !isLoggedIn) return;
 
     let cancelled = false;
 
+    /** 결과 없는 ABORTED 확정 시 폴링을 멈추고 재측정 안내로 넘김 */
+    const stopAsAborted = () => {
+      abortedRef.current = true;
+      setTier('ABORTED');
+      setPollingTimedOut(true);
+      setLoading(false);
+      setError(null);
+      if (pollTimerRef.current) {
+        clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+
     const fetchData = async () => {
       try {
+        let notFoundTier: AnalysisTier | null = null;
+        let statusError: unknown = null;
         const [analysisRes, statusRes] = await Promise.all([
-          analysisApi.getResult(groupId).catch(() => null),
-          sessionApi.checkSessionStatus(groupId),
+          analysisApi.getResult(groupId).catch((err: unknown) => {
+            notFoundTier = tierFromError(err);
+            return null;
+          }),
+          // 세션 조회 실패가 결과 조회의 ABORTED 판정을 막지 않게 따로 받음
+          sessionApi.checkSessionStatus(groupId).catch((err: unknown) => {
+            statusError = err;
+            return null;
+          }),
         ]);
 
-        if (cancelled) return;
+        // 조회 중 소켓으로 ABORTED 가 확정됐으면 늦은 응답이 화면을 덮지 않게 함
+        if (cancelled || abortedRef.current) return;
+        if (notFoundTier === 'ABORTED') {
+          stopAsAborted();
+          return;
+        }
+        if (!statusRes) throw statusError;
 
         // 세션 상태에서 userName/partnerName 추출함
         const sessions = statusRes.data?.data?.sessions ?? [];
@@ -84,9 +115,11 @@ const Results: React.FC<ResultsProps> = ({
 
         if (analysisRes?.status === 'success' && analysisRes.data) {
           setAnalysisData(analysisRes.data);
+          setTier(resolveTier(analysisRes.data, sessions.length));
           setLoading(false);
           if (pollTimerRef.current) clearInterval(pollTimerRef.current);
         } else {
+          if (notFoundTier) setTier(notFoundTier);
           // 분석 결과 미존재 — 폴링함
           setError('분석이 진행 중입니다...');
           pollStartRef.current = Date.now();
@@ -108,29 +141,23 @@ const Results: React.FC<ResultsProps> = ({
 
               try {
                 const res = await analysisApi.getResult(groupId);
-                if (!cancelled && res?.status === 'success' && res.data) {
+                if (
+                  !cancelled &&
+                  !abortedRef.current &&
+                  res?.status === 'success' &&
+                  res.data
+                ) {
                   setAnalysisData(res.data);
                   setError(null);
                   setLoading(false);
                   if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-
-                  // Tier 판정: isBTI인데 원래 DUAL이었으면 PARTIAL
-                  // SEQUENTIAL 결과는 tier 오탐 방지를 위해 제외함.
-                  // SESSION-W002 로 SEQUENTIAL 측정 경로는 사라졌으나 이 필터는
-                  // 남김 — analysis_mode 에는 과거 문서의 SEQUENTIAL 값이 legacy
-                  // 로 남아 있어 여전히 걸러야 함
-                  if (
-                    res.data.isBTI &&
-                    sessionsRef.current.length >= 2 &&
-                    res.data.analysis_mode !== 'SEQUENTIAL'
-                  ) {
-                    setTier('PARTIAL');
-                  } else {
-                    setTier('VALID');
-                  }
+                  setTier(resolveTier(res.data, sessionsRef.current.length));
                 }
-              } catch {
-                // 계속 폴링함
+              } catch (err) {
+                // 404 본문이 ABORTED 면 멈추고, 그 밖에는 계속 폴링함
+                if (!cancelled && tierFromError(err) === 'ABORTED') {
+                  stopAsAborted();
+                }
               }
             }, POLLING_INTERVAL_MS);
           }
@@ -169,6 +196,7 @@ const Results: React.FC<ResultsProps> = ({
       if (payload.groupId !== groupId) return;
       setTier(payload.tier);
       if (payload.tier === 'ABORTED') {
+        abortedRef.current = true;
         setPollingTimedOut(true);
         setLoading(false);
         setError(null);
