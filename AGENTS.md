@@ -2,7 +2,7 @@
 
 모든 에이전트(Claude Code / Codex CLI / 기타)가 이 레포에서 작업할 때 공통으로 따르는 지시. 세부 규칙은 `.agents/rules/`의 architecture.md, code-style.md, git-workflow.md, api-patterns.md, react-components.md, test-modification.md, verification-loop.md, documentation.md이며 작업 전에 직접 연다. 이 문서는 자가완결 — 상세 규칙은 `.agents/rules/*.md`로 확장됨(단방향, 이 문서가 1차 소스).
 
-> **제품 문서와 작업 상태**: 제품 공통 문서는 `../docs/`에 있음(구조·계약·데이터는 `docs/architecture/`, 요구사항·추적표는 `docs/requirements/`). 현재 작업 상태 정본은 `../.plans/DASHBOARD.md`.
+> **제품 문서와 작업 상태**: 제품 공통 문서는 `../docs/`에 있음(구조·계약·데이터는 `docs/architecture/`, 요구사항·추적표는 `docs/requirements/`). 각 Work의 상태와 우선순위 정본은 `../.plans/{Work 폴더}/PLAN.md` 머리말이고 열린 작업 목록과 다음 행동은 `../.plans/DASHBOARD.md`다(2026-10-19 DOCS-W013, `.plans/README.md` v1.6).
 
 ## 1. 개요
 
@@ -96,7 +96,7 @@ NEXT_PUBLIC_NODE_ENV=local
 
 MindSignal의 `.plans/` 작업 상태는 저장소별이 아니라 제품 단위인 `mind-signal/.plans/` 한 곳에서 관리함. 작업 폴더는 `{DOMAIN}-W{NNN}[-{slug}]` — 도메인 접두사(`OPS`, `SESSION` 등. 전체 목록은 `mind-signal/.plans/README.md`의 접두사 레지스트리)가 **독립적으로** 채번되고, 전역 단일 시퀀스가 아님. 신규는 W001부터 시작; 2026-07-30 이전 legacy에 소급 부여한 번호는 W101부터(그래서 `SESSION-W114`는 전체 114번째가 아니라 SESSION 소급 14번째). 번호는 영구 식별자이며 재사용·재번호화하지 않음 — 시간순은 번호가 아니라 레지스트리의 "시기" 열로 읽음.
 
-정본 문서: `mind-signal/.plans/DASHBOARD.md`(현재 작업), `HANDOFF.md`(세션 핸드오프), `README.md`(ID·상태·브랜치 이름 규칙), `LEGACY-REGISTRY.md`(소급 ID 매핑).
+정본 문서: 각 Work 폴더 `PLAN.md` 머리말(상태와 우선순위), `mind-signal/.plans/DASHBOARD.md`(열린 작업 목록과 다음 행동), `HANDOFF.md`(세션 핸드오프), `README.md`(ID·상태·브랜치 이름 규칙), `LEGACY-REGISTRY.md`(소급 ID 매핑).
 
 ## 11. 문서화
 
